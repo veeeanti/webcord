@@ -124,6 +124,11 @@ button:disabled{opacity:0.4;cursor:not-allowed}
 @media(max-width:640px){
  .chat{margin-left:0}
 }
+/* embeds + Discord Components V2 */
+.discord-embed{border-left:4px solid #5865f2;background:#101510;padding:10px 12px;margin-top:8px;max-width:620px;color:#d7e0d7;text-shadow:none;font:14px/1.45 system-ui,sans-serif;overflow-wrap:anywhere}
+.embed-author,.embed-footer{font-size:12px;color:#aab3aa;display:flex;align-items:center;gap:6px}.embed-title{font-weight:700;color:#fff;margin:5px 0}.embed-description{white-space:pre-wrap}.embed-fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}.embed-field{min-width:0}.embed-field strong{display:block;color:#fff}.embed-image,.embed-thumb{max-width:100%;border-radius:4px;margin-top:8px}.embed-thumb{float:right;max-width:90px;margin-left:10px}
+.dcv2-container{border:1px solid #3b433b;border-radius:8px;padding:10px;margin-top:8px;background:#111611;color:#dce4dc;text-shadow:none;font:14px/1.45 system-ui,sans-serif;max-width:680px}.dcv2-text{white-space:pre-wrap;overflow-wrap:anywhere}.dcv2-section{display:flex;gap:12px;align-items:flex-start}.dcv2-section-main{flex:1;min-width:0}.dcv2-media{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.dcv2-media img{max-width:100%;width:180px;max-height:220px;object-fit:contain;border-radius:5px}.dcv2-separator{border:0;border-top:1px solid #3b433b;margin:10px 0}.dcv2-action{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.dcv2-action button{font:13px system-ui,sans-serif;letter-spacing:0;text-transform:none;border-radius:5px;padding:7px 10px;background:#252b25;color:#eee;border-color:#4a554a}.dcv2-action button[disabled]{opacity:.55}.dcv2-unknown{font-size:12px;color:#999}
+@media(max-width:500px){.embed-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.dcv2-media img{width:100%}}
 .media-content {
  max-width: 100%;
  max-height: 300px;
@@ -131,6 +136,7 @@ button:disabled{opacity:0.4;cursor:not-allowed}
  border: 1px solid rgba(0,255,0,0.3);
  display: block;
 }
+.permission-panel{margin-top:8px;padding:9px;border:1px solid rgba(0,255,100,.25);background:#020902;color:#00dd55;text-shadow:none;font:12px/1.5 "Courier New",monospace;max-height:320px;overflow-y:auto}.permission-group{margin-top:9px}.permission-group h4{color:#00ff00;font-size:11px;letter-spacing:1px;border-bottom:1px solid rgba(0,255,100,.2);padding-bottom:3px;margin-bottom:4px}.permission-row{display:flex;justify-content:space-between;gap:8px;padding:2px 0}.permission-yes{color:#00ff77}.permission-no{color:#ff6666}.permission-note{color:#aaaa55;margin-bottom:6px}
 .login-tab {
  display: block;
  margin-bottom: 10px;
@@ -193,6 +199,9 @@ button:disabled{opacity:0.4;cursor:not-allowed}
  <section id="channelsSection" class="hidden">
  <h3>// CHANNELS</h3>
  <div class="list" id="channelsList"></div>
+ <button id="inviteBtn" style="width:100%;margin-top:8px">GET SERVER INVITE</button>
+ <button id="permissionsBtn" style="width:100%;margin-top:8px">VIEW MY PERMISSIONS</button>
+ <div id="permissionsPanel" class="permission-panel hidden" aria-live="polite"></div>
  </section>
  </div>
  </div>
@@ -220,6 +229,7 @@ var user = null;
 var guilds = {};
 var dmChannels = [];
 var currentChannelId = null;
+var currentGuildId = null;
 var lastMessageId = null;
 var pollTimer = null;
 var sidebarOpen = true;
@@ -235,7 +245,7 @@ if (saved) { getById('tokenInput').value = saved; }
 function api(endpoint, method, body, callback) {
   var xhr = new XMLHttpRequest();
   xhr.open(method, API_BASE + endpoint, true);
-  xhr.setRequestHeader('Authorization', token);
+  xhr.setRequestHeader('Authorization', authType === 'bot' ? (token.indexOf('Bot ') === 0 ? token : 'Bot ' + token) : token);
   xhr.setRequestHeader('Content-Type', 'application/json');
 
   xhr.onreadystatechange = function() {
@@ -386,6 +396,7 @@ function loadDMs() {
 }
 
 function loadChannels(guildId, item) {
+  currentGuildId = guildId;
   var items = document.querySelectorAll('.list-item');
   for (var i = 0; i < items.length; i++) items[i].className = 'list-item';
   item.className = 'list-item selected';
@@ -432,7 +443,7 @@ function loadMessages(channelId) {
       for (var i = msgs.length - 1; i >= 0; i--) {
         var m = msgs[i];
         seenMessages[m.id] = true;
-        addMessage(m.author.username, m.content);
+        addMessage(m.author.username, m.content, m);
       }
     }
     startPolling(channelId, lastMessageId);
@@ -461,37 +472,100 @@ function stopPolling() {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
 }
 
-function addMessage(author, content) {
-  var d = document.createElement('div');
-  d.className = 'message';
-
-  var authorDiv = document.createElement('div');
-  authorDiv.className = 'message-author';
-  authorDiv.textContent = author;
-
-  var contentDiv = document.createElement('div');
-  contentDiv.className = 'message-content';
-  contentDiv.textContent = content;
-
-  if (content.match(/\.(jpeg|jpg|gif|png)$/) != null ||
-      content.indexOf('cdn.discordapp.com') !== -1 ||
-      content.indexOf('media.discordapp.net') !== -1) {
-    var img = document.createElement('img');
-    img.src = content;
-    img.className = 'media-content';
-    d.appendChild(authorDiv);
-    d.appendChild(contentDiv);
-    d.appendChild(img);
-  } else {
-    d.appendChild(authorDiv);
-    d.appendChild(contentDiv);
-  }
-
-  var msgBox = getById('messages');
-  msgBox.appendChild(d);
-  msgBox.scrollTop = msgBox.scrollHeight;
+function safeImage(url){return typeof url==='string'&&/^https?:\/\//i.test(url);}
+function addMedia(parent,url,alt){if(!safeImage(url))return;var img=document.createElement('img');img.src=url;img.alt=alt||'';img.loading='lazy';img.className='media-content';parent.appendChild(img);}
+function renderEmbed(e){
+ var box=document.createElement('div');box.className='discord-embed';if(e.color)box.style.borderLeftColor='#'+Number(e.color).toString(16).padStart(6,'0');
+ if(e.author){var a=document.createElement('div');a.className='embed-author';if(e.author.icon_url)addMedia(a,e.author.icon_url,'');a.appendChild(document.createTextNode(e.author.name||''));box.appendChild(a);}
+ if(e.title){var t=document.createElement('div');t.className='embed-title';t.textContent=e.title;box.appendChild(t);}
+ if(e.description){var p=document.createElement('div');p.className='embed-description';p.textContent=e.description;box.appendChild(p);}
+ if(e.thumbnail&&safeImage(e.thumbnail.url)){var th=document.createElement('img');th.src=e.thumbnail.url;th.className='embed-thumb';box.appendChild(th);}
+ if(e.fields&&e.fields.length){var fs=document.createElement('div');fs.className='embed-fields';e.fields.forEach(function(f){var fd=document.createElement('div');fd.className='embed-field';var n=document.createElement('strong');n.textContent=f.name||'';var v=document.createElement('div');v.textContent=f.value||'';fd.append(n,v);fs.appendChild(fd);});box.appendChild(fs);}
+ if(e.image&&e.image.url)addMedia(box,e.image.url,'Embed image');
+ if(e.footer){var ft=document.createElement('div');ft.className='embed-footer';if(e.footer.icon_url)addMedia(ft,e.footer.icon_url,'');ft.appendChild(document.createTextNode((e.footer.text||'')+(e.timestamp?' · '+new Date(e.timestamp).toLocaleString():'')));box.appendChild(ft);}return box;
 }
-
+function renderComponent(c){
+ var el,children=c.components||[];
+ switch(c.type){
+ case 17:el=document.createElement('div');el.className='dcv2-container';if(c.accent_color)el.style.borderLeft='4px solid #'+Number(c.accent_color).toString(16).padStart(6,'0');children.forEach(function(x){el.appendChild(renderComponent(x));});return el;
+ case 10:el=document.createElement('div');el.className='dcv2-text';el.textContent=c.content||'';return el;
+ case 9:el=document.createElement('div');el.className='dcv2-section';var main=document.createElement('div');main.className='dcv2-section-main';children.forEach(function(x){main.appendChild(renderComponent(x));});el.appendChild(main);if(c.accessory)el.appendChild(renderComponent(c.accessory));return el;
+ case 11:el=document.createElement('div');if(c.media)addMedia(el,c.media.url,c.description);return el;
+ case 12:el=document.createElement('div');el.className='dcv2-media';(c.items||[]).forEach(function(it){if(it.media)addMedia(el,it.media.url,it.description);});return el;
+ case 13:el=document.createElement('div');el.textContent='📎 '+(c.name||'File');if(c.url){var l=document.createElement('a');l.href=c.url;l.textContent=' Open';l.target='_blank';l.rel='noopener';el.appendChild(l);}return el;
+ case 14:el=document.createElement('hr');el.className='dcv2-separator';return el;
+ case 1:el=document.createElement('div');el.className='dcv2-action';children.forEach(function(x){el.appendChild(renderComponent(x));});return el;
+ case 2:el=document.createElement('button');el.textContent=c.label||'Button';el.disabled=true;el.title='Interactive Discord buttons unavailable in read-only client';return el;
+ default:el=document.createElement('div');el.className='dcv2-unknown';el.textContent='[Component type '+c.type+']';return el;
+ }
+}
+function addMessage(author,content,message){
+ var d=document.createElement('div');d.className='message';var a=document.createElement('div');a.className='message-author';a.textContent=author;d.appendChild(a);
+ if(content){var p=document.createElement('div');p.className='message-content';p.textContent=content;d.appendChild(p);}
+ if(message&&message.components)message.components.forEach(function(c){d.appendChild(renderComponent(c));});
+ if(message&&message.embeds)message.embeds.forEach(function(e){d.appendChild(renderEmbed(e));});
+ if(message&&message.attachments)message.attachments.forEach(function(x){if(x.content_type&&x.content_type.indexOf('image/')===0)addMedia(d,x.url,x.filename);else{var l=document.createElement('a');l.href=x.url;l.textContent='📎 '+x.filename;l.target='_blank';l.rel='noopener';d.appendChild(l);}});
+ var box=getById('messages');box.appendChild(d);box.scrollTop=box.scrollHeight;
+}
+// Server-level permissions are supplied by Discord on the current-user guild list.
+var permissionGroups = {
+ 'GENERAL': [
+  ['Administrator', 3n], ['Manage Server', 32n], ['Manage Channels', 16n],
+  ['Manage Roles', 268435456n], ['Manage Webhooks', 536870912n],
+  ['View Audit Log', 128n], ['Manage Events', 8589934592n],
+  ['Create Expressions', 8796093022208n], ['Manage Expressions', 17592186044416n]
+ ],
+ 'MEMBERSHIP': [
+  ['Create Invite', 1n], ['Change Nickname', 67108864n],
+  ['Manage Nicknames', 134217728n], ['Kick Members', 2n],
+  ['Ban Members', 4n], ['Moderate Members', 1099511627776n]
+ ],
+ 'TEXT & VOICE': [
+  ['View Channels', 1024n], ['Send Messages', 2048n],
+  ['Send Messages in Threads', 274877906944n], ['Create Public Threads', 34359738368n],
+  ['Create Private Threads', 68719476736n], ['Manage Messages', 8192n],
+  ['Manage Threads', 17179869184n], ['Embed Links', 16384n],
+  ['Attach Files', 32768n], ['Read Message History', 65536n],
+  ['Add Reactions', 64n], ['Use External Emojis', 262144n],
+  ['Use External Stickers', 137438953472n], ['Connect to Voice', 1048576n],
+  ['Speak', 2097152n], ['Mute Members', 4194304n], ['Deafen Members', 8388608n],
+  ['Move Members', 16777216n], ['Use Voice Activity', 33554432n],
+  ['Priority Speaker', 256n], ['Stream Video', 512n]
+ ],
+ 'ADVANCED': [
+  ['Mention Everyone', 131072n], ['Use Application Commands', 2147483648n],
+  ['Use External Apps', 1125899906842624n], ['Use Soundboard', 4398046511104n], ['Use External Sounds', 35184372088832n],
+  ['Send Voice Messages', 70368744177664n], ['Send Polls', 562949953421312n]
+ ]
+};
+function showServerPermissions(){
+ if(!currentGuildId){alert('Select a server first.');return;}
+ var panel=getById('permissionsPanel'),g=guilds[currentGuildId];
+ if(!g){panel.className='permission-panel';panel.textContent='Permission data unavailable. Refresh the server list.';return;}
+ var raw=g.permissions_new||g.permissions||'0',bits;
+ try{bits=BigInt(raw);}catch(e){panel.className='permission-panel';panel.textContent='Discord did not return readable permission data for this server.';return;}
+ var admin=(bits&8n)===8n, html='';
+ html+='<div class="permission-note">Server: '+escapeHtml(g.name||'Selected server')+'</div>';
+ html+='<div class="permission-note">'+(admin?'ADMINISTRATOR — all server permissions are granted.':'Showing effective server-level permissions returned by Discord.')+'</div>';
+ Object.keys(permissionGroups).forEach(function(group){
+  html+='<div class="permission-group"><h4>// '+group+'</h4>';
+  permissionGroups[group].forEach(function(p){
+   var allowed=admin||((bits&p[1])===p[1]);
+   html+='<div class="permission-row"><span>'+p[0]+'</span><strong class="'+(allowed?'permission-yes':'permission-no')+'">'+(allowed?'YES':'NO')+'</strong></div>';
+  });
+  html+='</div>';
+ });
+ panel.className='permission-panel';
+ panel.innerHTML=html;
+}
+function getServerInvite(){
+ if(!currentGuildId){alert('Select a server first.');return;}var b=getById('inviteBtn');b.disabled=true;b.textContent='SEARCHING...';
+ api('/guilds/'+currentGuildId+'/channels','GET',null,function(err,chs){if(err){b.disabled=false;b.textContent='GET SERVER INVITE';alert(err.message);return;}
+ var list=(chs||[]).filter(function(c){return c.type===0||c.type===5;});
+ function done(url){b.disabled=false;b.textContent='GET SERVER INVITE';if(url)prompt('Invite link (copy):',url);else alert('No invite found or permission denied. Grant Create Invite permission.');}
+ function scan(i){if(i>=list.length){done('');return;}api('/channels/'+list[i].id+'/invites','GET',null,function(e,inv){if(!e&&inv&&inv.length){done('https://discord.gg/'+inv[0].code);return;}scan(i+1);});}scan(0);
+ });
+}
 function escapeHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
@@ -504,7 +578,7 @@ function sendMessage() {
     else {
       getById('messageInput').value = '';
       if (msgData && msgData.id) {
-        addMessage(msgData.author.username, msgData.content);
+        addMessage(msgData.author.username, msgData.content, msgData);
         seenMessages[msgData.id] = true;
       }
     }
@@ -517,12 +591,9 @@ function sendMessage() {
   getById('tokenFields').className = '';
   getById('passFields').className = 'hidden';
 };
-getById('passLoginTab').onclick = function() {
-  loginMode = 'pass';
-  getById('tokenFields').className = 'hidden';
-  getById('passFields').className = '';
-};
 getById('connectBtn').onclick = connect;
+getById('inviteBtn').onclick = getServerInvite;
+getById('permissionsBtn').onclick = showServerPermissions;
 getById('disconnectBtn').onclick = disconnect;
 getById('sendBtn').onclick = sendMessage;
 getById('messageInput').onkeypress = function(e) {

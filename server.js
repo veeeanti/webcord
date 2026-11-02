@@ -6,7 +6,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const API_BASE = 'https://discord.com/api/v10';
 
-app.use(express.static(path.join(__dirname)));
 app.use(express.json());
 
 app.use((req, res, next) => {
